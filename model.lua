@@ -1,5 +1,6 @@
 require "nn"
 require "xlua"
+require "optim"
 
 print("\n---------------------------------------------------------------------------------")
 print("=> Creating the model...")
@@ -68,45 +69,52 @@ print(model)
 print("\n---------------------------------------------------------------------------------")
 print("=> Training on "..params.dataset.." dataset...")
 print("---------------------------------------------------------------------------------")
-criterion = nn.MSECriterion()
+
+criterion = nn.BCECriterion()
+
 local total_batches = math.floor(#input_data[1] / params.batchSize)
 
-for t = 1, total_batches*params.batchSize, params.batchSize do
-    xlua.progress(t, total_batches*params.batchSize)
+parameters, gradParameters = model:getParameters()
 
-    input_batch = {}
-    input_batch[1] = {}
-    input_batch[2] = {}
-    labels_batch = {}
+for e = 1, params.noOfEpochs do
+    -- xlua.progress(e, params.noOfEpochs)
+    print("=> Epoch "..e.."/"..params.noOfEpochs)
+    -- print(parameters)
 
-    for i = 1, params.batchSize do
-        input_batch[1][i] = input_data[1][t + i - 1]
-        input_batch[2][i] = input_data[2][t + i - 1]
-        table.insert(labels_batch, labels[t + i - 1])
+    for t = 1, total_batches*params.batchSize, params.batchSize do
+        print("test")
+        xlua.progress(t + params.batchSize - 1, total_batches*params.batchSize)
+
+        local input_batch = {}
+        input_batch[1] = {}
+        input_batch[2] = {}
+        local labels_batch = {}
+
+        for i = 1, params.batchSize do
+            input_batch[1][i] = input_data[1][t + i - 1]
+            input_batch[2][i] = input_data[2][t + i - 1]
+            table.insert(labels_batch, labels[t + i - 1])
+        end
+
+        local labels_tensor = torch.Tensor(labels_batch)
+
+        function feval(parameters)
+            gradParameters:zero()
+            -- model:zeroGradParameters()
+
+            local model_output = model:forward(input_batch)
+            local loss = criterion:forward(model_output, labels_tensor)
+            local dloss_doutput = criterion:backward(model_output, labels_tensor)
+            model:backward(input_batch, dloss_doutput)
+
+            -- model:updateParameters(params.learningRate)
+            return loss, gradParameters
+        end
+        optim.sgd(feval, parameters, {learningRate = params.learningRate})
     end
 
-    print(input_batch)
-
-    labels_tensor = torch.Tensor(labels_batch)
-    print(labels_tensor)
-
-
-    model:zeroGradParameters()
-
-    criterion:forward(model:forward(input_batch), labels_tensor)
-
-    model:backward(input_batch, criterion:backward(model.output, labels_tensor))
-
-    model:updateParameters(params.learningRate)
-
-    collectgarbage()
 end
 
 print("=> Finished!")
-
--- criterion:forward(model:forward(input_data), labels)
--- model:zeroGradParameters()
--- model:backward(input_data, criterion:backward(model.output, labels))
--- model:updateParameters(params.learningRate)
 
 print(model:forward(test_data))
