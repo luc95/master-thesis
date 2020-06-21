@@ -15,4 +15,4 @@ print(params)
 -- Load data from dataset with provided name
 -- dofile("./utils.lua")
 dofile("./load_data.lua")
-dofile("./model.lua")
+dofile("./model_test.lua")

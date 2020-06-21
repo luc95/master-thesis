@@ -112,8 +112,8 @@ local function get_protein_profile(protein_sequence, length)
     return protein_profile
 end
 
-protein_sequence_indexes = {}
-other_protein_sequence_indexes = {}
+-- protein_sequence_indexes = {}
+-- other_protein_sequence_indexes = {}
 input_data = {}
 input_data[1] = {}
 input_data[2] = {}
@@ -124,18 +124,19 @@ test_data[2] = {}
 
 local function create_protein_sequences_tensors(protein_pairs_interactions, protein_sequences)
     -- Sequences of proteins in pair added to one table
-    local protein_pairs_sequences = {}
     local interactions = {}
+    local test_interactions = {}
+
 
     print("=> Creating the tensors...")
     for index, protein_pair in ipairs(protein_pairs_interactions) do
         local protein_profile = get_protein_profile(protein_sequences[protein_pair[1]])
         local other_protein_profile = get_protein_profile(protein_sequences[protein_pair[2]])
 
-        table.insert(protein_sequence_indexes, #protein_pairs_sequences+1)
-        protein_pairs_sequences[#protein_pairs_sequences+1] = protein_profile
-        table.insert(other_protein_sequence_indexes, #protein_pairs_sequences+1)
-        protein_pairs_sequences[#protein_pairs_sequences+1] = other_protein_profile
+        -- table.insert(protein_sequence_indexes, #protein_pairs_sequences+1)
+        -- protein_pairs_sequences[#protein_pairs_sequences+1] = protein_profile
+        -- table.insert(other_protein_sequence_indexes, #protein_pairs_sequences+1)
+        -- protein_pairs_sequences[#protein_pairs_sequences+1] = other_protein_profile
         
         if (index < #protein_pairs_interactions - 0.3*#protein_pairs_interactions) then 
             table.insert(input_data[1], protein_profile )
@@ -144,6 +145,7 @@ local function create_protein_sequences_tensors(protein_pairs_interactions, prot
         else
             table.insert(test_data[1], protein_profile)
             table.insert(test_data[2], other_protein_profile)
+            table.insert(test_interactions, protein_pair[3])
         end
 
         -- table.insert(interactions, protein_pair[3])
@@ -152,9 +154,13 @@ local function create_protein_sequences_tensors(protein_pairs_interactions, prot
 
     print("\n")
     labels = torch.Tensor(interactions)
+    test_labels = torch.Tensor(test_interactions)
+
     torch.save(params.dataset..'.protein.features.train.t7', input_data)
     torch.save(params.dataset..'.protein.features.test.t7', test_data)
     torch.save(params.dataset..'.protein.labels.train.t7', labels)
+    torch.save(params.dataset..'.protein.labels.test.t7', test_labels)
+
 end
 
 -- loading the dataset
@@ -164,7 +170,7 @@ if params.dataset then
 
     get_amino_acid_embeddings('./amino_acid_embeddings.txt')
 
-    local file_path = './'..params.dataset..'/'..params.dataset..'_small.protein.actions'
+    local file_path = './'..params.dataset..'/'..params.dataset..'.protein.actions'
     if path.exists(file_path..'.dat') == false then
         convert_tsv_to_dat(file_path..'.tsv')
     end
@@ -186,6 +192,7 @@ if params.dataset then
         input_data = torch.load(train_data_file)
         test_data = torch.load('./'..params.dataset..'.protein.features.test.t7')
         labels = torch.load('./'..params.dataset..'.protein.labels.train.t7')
+        test_labels = torch.load('./'..params.dataset..'.protein.labels.test.t7')
     end
 
     -- print(input_data)
