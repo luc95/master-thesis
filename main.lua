@@ -3,7 +3,7 @@ require "torch"
 cmd = torch.CmdLine()
 cmd:option('-dataset', 'yeast', 'name of dataset used for training')
 
-cmd:option('-optimzationMethod', 'ADAM', 'optimization method: SGD, ADAM or RMS')
+cmd:option('-optimizationMethod', 'SGD', 'optimization method: SGD, ADAM or RMSProp')
 cmd:option('-learningRate', 0.01, 'initial learning rate')
 cmd:option('-batchSize', 100, 'mini-batch size')
 cmd:option('-noOfEpochs', 10, 'number of epochs')
@@ -16,3 +16,4 @@ print(params)
 -- dofile("./utils.lua")
 dofile("./load_data.lua")
 dofile("./model_test.lua")
+dofile("./eval.lua")

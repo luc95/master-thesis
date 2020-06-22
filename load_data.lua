@@ -6,27 +6,6 @@ print("-------------------------------------------------------------------------
 
 amino_acid_embeddings = {}
 
--- amino_acid_embeddings["A"]=0.0799912015849807 --A
--- amino_acid_embeddings["R"]=0.0484482507611578 --R
--- amino_acid_embeddings["N"]=0.044293531582512 --N
--- amino_acid_embeddings["D"]=0.0578891399707563 --D
--- amino_acid_embeddings["C"]=0.0171846021407367 --C
--- amino_acid_embeddings["Q"]=0.0380578923048682 --Q
--- amino_acid_embeddings["E"]=0.0638169929675978 --E
--- amino_acid_embeddings["G"]=0.0760659374742852 --G
--- amino_acid_embeddings["H"]=0.0223465499452473 --H
--- amino_acid_embeddings["I"]=0.0550905793661343 --I
--- amino_acid_embeddings["L"]=0.0866897071203864 --L
--- amino_acid_embeddings["K"]=0.060458245507428 --K
--- amino_acid_embeddings["M"]=0.0215379186368154 --M
--- amino_acid_embeddings["F"]=0.0396348024787477 --F
--- amino_acid_embeddings["P"]=0.0465746314476874 --P
--- amino_acid_embeddings["S"]=0.0630028230885602 --S
--- amino_acid_embeddings["T"]=0.0580394726014824 --T
--- amino_acid_embeddings["W"]=0.0144991866213453 --W
--- amino_acid_embeddings["Y"]=0.03635438623143 --Y
--- amino_acid_embeddings["V"]=0.0700241481678408 --V
-
 local function get_amino_acid_embeddings(file_name)
     io.input(file_name)
     -- local amino_acid_embeddings = {}
@@ -118,6 +97,11 @@ input_data = {}
 input_data[1] = {}
 input_data[2] = {}
 
+
+train_data = {}
+train_data[1] = {}
+train_data[2] = {}
+
 test_data = {}
 test_data[1] = {}
 test_data[2] = {}
@@ -125,40 +109,94 @@ test_data[2] = {}
 local function create_protein_sequences_tensors(protein_pairs_interactions, protein_sequences)
     -- Sequences of proteins in pair added to one table
     local interactions = {}
+    local train_interactions = {}
     local test_interactions = {}
 
+    local negative_interactions = {}
+    local positive_interactions = {}
+    for index, protein_pair in ipairs(protein_pairs_interactions) do
+        if protein_pair[3] == "0" then 
+            table.insert(negative_interactions, protein_pair)
+        else 
+            table.insert(positive_interactions,protein_pair)
+        end
+    end
 
     print("=> Creating the tensors...")
-    for index, protein_pair in ipairs(protein_pairs_interactions) do
+    for index, protein_pair in ipairs(positive_interactions) do
         local protein_profile = get_protein_profile(protein_sequences[protein_pair[1]])
         local other_protein_profile = get_protein_profile(protein_sequences[protein_pair[2]])
 
-        -- table.insert(protein_sequence_indexes, #protein_pairs_sequences+1)
-        -- protein_pairs_sequences[#protein_pairs_sequences+1] = protein_profile
-        -- table.insert(other_protein_sequence_indexes, #protein_pairs_sequences+1)
-        -- protein_pairs_sequences[#protein_pairs_sequences+1] = other_protein_profile
-        
-        if (index < #protein_pairs_interactions - 0.3*#protein_pairs_interactions) then 
-            table.insert(input_data[1], protein_profile )
-            table.insert(input_data[2], other_protein_profile )
-            table.insert(interactions, protein_pair[3])
+        if (index < #positive_interactions - 0.2*#positive_interactions) then 
+            table.insert(train_data[1], protein_profile )
+            table.insert(train_data[2], other_protein_profile )
+            table.insert(train_interactions, protein_pair[3])
         else
             table.insert(test_data[1], protein_profile)
             table.insert(test_data[2], other_protein_profile)
             table.insert(test_interactions, protein_pair[3])
         end
 
-        -- table.insert(interactions, protein_pair[3])
-        xlua.progress(index, #protein_pairs_interactions)
+        table.insert(input_data[1], protein_profile )
+        table.insert(input_data[2], other_protein_profile )
+        table.insert(interactions, protein_pair[3])
+
+        xlua.progress(index, #positive_interactions)
+    end
+
+    for index, protein_pair in ipairs(negative_interactions) do
+        local protein_profile = get_protein_profile(protein_sequences[protein_pair[1]])
+        local other_protein_profile = get_protein_profile(protein_sequences[protein_pair[2]])
+
+        if (index < #negative_interactions - 0.2*#negative_interactions) then 
+            table.insert(train_data[1], protein_profile )
+            table.insert(train_data[2], other_protein_profile )
+            table.insert(train_interactions, protein_pair[3])
+        else
+            table.insert(test_data[1], protein_profile)
+            table.insert(test_data[2], other_protein_profile)
+            table.insert(test_interactions, protein_pair[3])
+        end
+
+        table.insert(input_data[1], protein_profile )
+        table.insert(input_data[2], other_protein_profile )
+        table.insert(interactions, protein_pair[3])
+
+        xlua.progress(index, #negative_interactions)
+    end
+
+    -- shuffle data
+    for i = #input_data[1], 2, -1 do
+        local j = math.random(i)
+        input_data[1][i], input_data[1][j] = input_data[1][j], input_data[1][i]
+        input_data[2][i], input_data[2][j] = input_data[2][j], input_data[2][i]
+        interactions[i], interactions[j] = interactions[j], interactions[i]
+    end
+
+    for i = #train_data[1], 2, -1 do
+        local j = math.random(i)
+        train_data[1][i], train_data[1][j] = train_data[1][j], train_data[1][i]
+        train_data[2][i], train_data[2][j] = train_data[2][j], train_data[2][i]
+        train_interactions[i], train_interactions[j] = train_interactions[j], train_interactions[i]
+    end
+
+    for i = #test_data[1], 2, -1 do
+        local j = math.random(i)
+        test_data[1][i], test_data[1][j] = test_data[1][j], test_data[1][i]
+        test_data[2][i], test_data[2][j] = test_data[2][j], test_data[2][i]
+        test_interactions[i], test_interactions[j] = test_interactions[j], test_interactions[i]
     end
 
     print("\n")
     labels = torch.Tensor(interactions)
+    train_labels = torch.Tensor(train_interactions)
     test_labels = torch.Tensor(test_interactions)
 
-    torch.save(params.dataset..'.protein.features.train.t7', input_data)
+    torch.save(params.dataset..'.protein.features.all.t7', input_data)
+    torch.save(params.dataset..'.protein.labels.all.t7', labels)
+    torch.save(params.dataset..'.protein.features.train.t7', train_data)
     torch.save(params.dataset..'.protein.features.test.t7', test_data)
-    torch.save(params.dataset..'.protein.labels.train.t7', labels)
+    torch.save(params.dataset..'.protein.labels.train.t7', train_labels)
     torch.save(params.dataset..'.protein.labels.test.t7', test_labels)
 
 end
@@ -189,12 +227,16 @@ if params.dataset then
     if path.exists(train_data_file) == false then
         create_protein_sequences_tensors(protein_pairs_interactions, protein_sequences)
     else
-        input_data = torch.load(train_data_file)
+        train_data = torch.load(train_data_file)
         test_data = torch.load('./'..params.dataset..'.protein.features.test.t7')
-        labels = torch.load('./'..params.dataset..'.protein.labels.train.t7')
+        train_labels = torch.load('./'..params.dataset..'.protein.labels.train.t7')
         test_labels = torch.load('./'..params.dataset..'.protein.labels.test.t7')
+        input_data = torch.load('./'..params.dataset..'.protein.features.all.t7')
+        labels = torch.load('./'..params.dataset..'.protein.labels.all.t7')
+        print(labels:size(1))
     end
 
+   
     -- print(input_data)
     -- print("Time needed for creating and loading train and test data: ")
     -- print(sys.clock() - time)
