@@ -33,38 +33,68 @@ function create_folds()
         end
     end
 
+    -- print(positive_interactions)
+
     local positive_fold_size = math.floor(#positive_interactions[1] / k)
     local negative_fold_size = math.floor(#negative_interactions[1] / k)
-    
+
+    local ratio = math.floor(positive_fold_size / negative_fold_size)
+    local fold_size = math.floor(labels:size(1) / k)
+
     local fold_idx = 0
-    for i=1, positive_fold_size * k, positive_fold_size do
+    for i=1, fold_size * k, fold_size do
         fold_idx = fold_idx + 1
-        for j=1, positive_fold_size do
-            table.insert(folds[fold_idx][1], positive_interactions[1][i + j - 1])
-            table.insert(folds[fold_idx][2], positive_interactions[2][i + j - 1])
-            table.insert(folds_labels[fold_idx], 1)
+        local count = 0
+        local pos_count = 0
+        local neg_count = 0
+        for j=1, fold_size do
+            count = count + 1
+            if count <= ratio then
+                pos_count = pos_count + 1
+                table.insert(folds[fold_idx][1], positive_interactions[1][(fold_idx-1)*positive_fold_size + pos_count])
+                table.insert(folds[fold_idx][2], positive_interactions[2][(fold_idx-1)*positive_fold_size + pos_count])
+                table.insert(folds_labels[fold_idx], 1)
+            else
+                neg_count = neg_count + 1
+                table.insert(folds[fold_idx][1], negative_interactions[1][(fold_idx-1)*negative_fold_size + neg_count])
+                table.insert(folds[fold_idx][2], negative_interactions[2][(fold_idx-1)*negative_fold_size + neg_count])
+                table.insert(folds_labels[fold_idx], 0)
+            end
+            if count > ratio then
+                count = 0
+            end
         end
     end
 
-    local fold_idx = 0
-    for i=1, negative_fold_size * k, negative_fold_size do
-        fold_idx = fold_idx + 1
-        for j=1, negative_fold_size do
-            table.insert(folds[fold_idx][1], negative_interactions[1][i + j - 1])
-            table.insert(folds[fold_idx][2], negative_interactions[2][i + j - 1])
-            table.insert(folds_labels[fold_idx], 0)
-        end
-    end
+    -- local fold_idx = 0
+    -- for i=1, positive_fold_size * k, positive_fold_size do
+    --     fold_idx = fold_idx + 1
+    --     for j=1, positive_fold_size do
+    --         table.insert(folds[fold_idx][1], positive_interactions[1][i + j - 1])
+    --         table.insert(folds[fold_idx][2], positive_interactions[2][i + j - 1])
+    --         table.insert(folds_labels[fold_idx], 1)
+    --     end
+    -- end
+
+    -- local fold_idx = 0
+    -- for i=1, negative_fold_size * k, negative_fold_size do
+    --     fold_idx = fold_idx + 1
+    --     for j=1, negative_fold_size do
+    --         table.insert(folds[fold_idx][1], negative_interactions[1][i + j - 1])
+    --         table.insert(folds[fold_idx][2], negative_interactions[2][i + j - 1])
+    --         table.insert(folds_labels[fold_idx], 0)
+    --     end
+    -- end
 
     
-    for l=1, k do
-        for i = #folds[l][1], 2, -1 do
-            local j = math.random(i)
-            folds[l][1][i], folds[l][1][j] = folds[l][1][j], folds[l][1][i]
-            folds[l][2][i], folds[l][2][j] = folds[l][2][j], folds[l][2][i]
-            folds_labels[l][i], folds_labels[l][j] = folds_labels[l][j], folds_labels[l][i]
-        end
-    end
+    -- for l=1, k do
+    --     for i = #folds[l][1], 2, -1 do
+    --         local j = math.random(i)
+    --         folds[l][1][i], folds[l][1][j] = folds[l][1][j], folds[l][1][i]
+    --         folds[l][2][i], folds[l][2][j] = folds[l][2][j], folds[l][2][i]
+    --         folds_labels[l][i], folds_labels[l][j] = folds_labels[l][j], folds_labels[l][i]
+    --     end
+    -- end
 
 end
 
@@ -74,7 +104,10 @@ create_folds()
 local optimizationMethod = optim.sgd
 local optimizationConfig = {
     learningRate = params.learningRate,
-    momentum = 0.9
+    momentum = 0.9,
+    learningRateDecay = 0.000001
+    -- nesterov = true,
+    -- dampening = 0
 }
 
 if params.optimzationMethod == "ADAM" then
@@ -92,7 +125,6 @@ elseif params.optimzationMethod == "RMSProp" then
     }
 end
 
-local fold_size = math.floor(labels:size(1) / 5)
 
 local avg_acc = 0
 local avg_p = 0
@@ -137,7 +169,6 @@ for test_idx = 1, 5 do
     end
 
     local total_batches = math.floor(#train_data[1] / params.batchSize)
-    parameters, gradParameters = model:getParameters()
 
     local shuffle = torch.randperm(total_batches)
 
@@ -145,7 +176,9 @@ for test_idx = 1, 5 do
         print("=> Epoch "..e.."/"..params.noOfEpochs)
 
         local time = sys.clock()
+        parameters, gradParameters = model:getParameters()
 
+        model:training()
         local k = 0
         for t = 1, total_batches*params.batchSize, params.batchSize do
             xlua.progress(t + params.batchSize - 1, total_batches*params.batchSize)
@@ -164,7 +197,7 @@ for test_idx = 1, 5 do
             end
             local input_batch = {input_batch_1, input_batch_2}
             local labels_tensor = torch.Tensor(labels_batch)
-
+            -- print(labels_tensor)
             model:zeroGradParameters()
             local feval = function(x)
                 if x ~= parameters then
@@ -174,6 +207,7 @@ for test_idx = 1, 5 do
                 gradParameters:zero()
                 local model_output = model:forward(input_batch)
                 local loss = criterion:forward(model_output, labels_tensor)
+                -- print(loss)
                 local dloss_doutput = criterion:backward(model_output, labels_tensor)
                 model:backward(input_batch, dloss_doutput)
                 return loss, gradParameters
@@ -181,6 +215,8 @@ for test_idx = 1, 5 do
             optimizationMethod(feval, parameters, optimizationConfig)
         end
         print("Time needed for completing the epoch: "..(sys.clock() - time).." seconds")
+
+        parameters, gradParameters = nil, nil
         collectgarbage()
     end
 
@@ -197,6 +233,7 @@ for test_idx = 1, 5 do
     local fp = 0
     local fn = 0
     local k = 0
+    model:evaluate()
     for t = 1, test_total_batches*params.batchSize, params.batchSize do
         xlua.progress(t + params.batchSize - 1, test_total_batches*params.batchSize)
 
